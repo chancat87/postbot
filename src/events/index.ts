@@ -4,15 +4,21 @@ import { user } from '@gitcoffee/postbot-api';
 
 const checkLoginAndSend = async (tab: chrome.tabs.Tab | undefined, action: string, extra?: { srcUrl?: string }) => {
   if (!tab?.id) return;
+  const send = (message: any) => {
+    chrome.tabs.sendMessage(tab.id!, message, () => {
+      // 忽略目标页不存在 / 上下文失效等错误
+      void chrome.runtime.lastError;
+    });
+  };
   try {
     const res = await user.isLoginApi({});
     if (res?.data?.login) {
-      chrome.tabs.sendMessage(tab.id, { action, ...extra });
+      send({ action, ...extra });
     } else {
-      chrome.tabs.sendMessage(tab.id, { action: CONTEXT_MENU_ACTION.DO_LOGIN });
+      send({ action: CONTEXT_MENU_ACTION.DO_LOGIN });
     }
   } catch {
-    chrome.tabs.sendMessage(tab.id, { action: CONTEXT_MENU_ACTION.DO_LOGIN });
+    send({ action: CONTEXT_MENU_ACTION.DO_LOGIN });
   }
 };
 

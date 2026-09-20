@@ -84,7 +84,8 @@ export const kuaishouMomentPublisher = async (data) => {
         uploadVideoButtonText: '上传视频',
         // title: 'input[type="text"]',
         editor: 'div[contenteditable="true"]',
-        submitButton: 'button',
+        // 发布/取消是 div 而非 button，class 为 CSS Modules 哈希（构建后会变），用前缀通配匹配
+        formButtons: 'div[class^="_section-form-btns_"]',
         publishButtonText: '发布',
         draftButtonText: '暂存离开',
     }
@@ -252,16 +253,84 @@ export const kuaishouMomentPublisher = async (data) => {
         // editor.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    // 通过 CDP 派发真实鼠标事件点击（滚动至可见 → 悬浮 → 按下 → 抬起），失败时回退 DOM click
+    const cdpClick = async (element: HTMLElement) => {
+        element.scrollIntoView({ block: 'center', inline: 'center' });
+        await sleep(300);
+
+        const rect = element.getBoundingClientRect();
+        const x = Math.round(rect.left + rect.width / 2);
+        const y = Math.round(rect.top + rect.height / 2);
+        console.log('cdpClick', { x, y });
+
+        if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
+            console.log('cdpClick 不可用（无 chrome.runtime），回退 DOM click');
+            element.click();
+            return false;
+        }
+
+        return new Promise<boolean>((resolve) => {
+            chrome.runtime.sendMessage({
+                type: 'request',
+                action: 'cdpClick',
+                data: { x, y },
+            }, (response: any) => {
+                if (chrome.runtime.lastError || response?.error) {
+                    console.log('cdpClick 失败，回退 DOM click', chrome.runtime.lastError?.message || response?.error);
+                    element.click();
+                    resolve(false);
+                    return;
+                }
+                console.log('cdpClick 完成');
+                resolve(true);
+            });
+        });
+    }
+
+    const getPublishButton = () => {
+        // 优先：发布按钮区容器内的 div 按钮（发布为 primary，取消为 default）
+        const formButtons = document.querySelector(formElement.formButtons);
+        if (formButtons) {
+            const candidates = formButtons.querySelectorAll('div[class*="_button_"]');
+            const publishButton = Array.from(candidates).find((button) =>
+                button.textContent?.trim() === formElement.publishButtonText
+            );
+            if (publishButton) {
+                console.log('publishButton', publishButton);
+                return publishButton as HTMLElement;
+            }
+        }
+
+        // 兜底 1：全页 class 含 _button_ 的 div，文本精确匹配「发布」
+        const divButtons = document.querySelectorAll('div[class*="_button_"]');
+        const divPublishButton = Array.from(divButtons).find((button) =>
+            button.textContent?.trim() === formElement.publishButtonText
+        );
+        if (divPublishButton) {
+            console.log('divPublishButton', divPublishButton);
+            return divPublishButton as HTMLElement;
+        }
+
+        // 兜底 2：旧版 button 元素（文本包含匹配）
+        const buttons = document.querySelectorAll('button');
+        const buttonPublish = Array.from(buttons).find((button) =>
+            button.textContent?.includes(formElement.publishButtonText)
+        );
+        console.log('buttonPublish', buttonPublish);
+        return (buttonPublish as HTMLElement) || null;
+    }
+
     const autoPublish = async () => {
         console.log('autoPublish');
-        const buttons = document.querySelectorAll(formElement.submitButton);
-        const publishButton = Array.from(buttons).find((button) => button.textContent?.includes(formElement.publishButtonText));
-        if (publishButton) {
-            console.log('自动点击发布');
-            publishButton.click();
-            await sleep(5000);
-            window.location.href = 'https://creator.kuaishou.com/new/note-manager';
+        const publishButton = getPublishButton();
+        if (!publishButton) {
+            console.log(`未找到${formElement.publishButtonText}按钮`);
+            return;
         }
+        console.log('trrigle publish button click');
+        await cdpClick(publishButton);
+        await sleep(5000);
+        window.location.href = 'https://creator.kuaishou.com/new/note-manager';
     }
 
     await observeElement(formElement.uploadButtons);

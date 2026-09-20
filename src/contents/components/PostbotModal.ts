@@ -31,14 +31,25 @@ export default defineComponent({
     });
 
     const handleClick = () => {
-      chrome.runtime.sendMessage({ type: 'request', action: 'checkLogin' }, (response) => {
+      const onLoginResponse = (response: any) => {
         if (response?.isLogin) {
           state.rangType = 'content';
           state.isModalVisible = true;
         } else {
           window.open(`${getPostBotBaseUrl()}${getPublishPath()}`, '_blank');
         }
-      });
+      };
+
+      try {
+        chrome.runtime.sendMessage({ type: 'request', action: 'checkLogin' }, (response) => {
+          if (chrome.runtime.lastError) {
+            return;
+          }
+          onLoginResponse(response);
+        });
+      } catch (error) {
+        console.warn('[PostBot] checkLogin failed:', error);
+      }
     }
 
     const getPopupContainer = shadowContainer ? () => shadowContainer : undefined;

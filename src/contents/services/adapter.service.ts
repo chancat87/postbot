@@ -95,17 +95,22 @@ const buildWatcher = async (): Promise<void> => {
     brokenCooldown: 90_000,
   });
 
-  watcher.on('broken', (report: DiagnosisReport) => {
-    void runAutoRepair(report);
-  });
+  // watcher.on('broken', (report: DiagnosisReport) => {
+  //   void runAutoRepair(report);
+  // });
 
   watcher.start();
   console.log(`[AiAdapter] 已开始观测 ${key}`);
 };
 
 export async function initAdapterService(): Promise<void> {
-  await initAdapterRegistry();
-  await buildWatcher();
+  try {
+    await initAdapterRegistry();
+    await buildWatcher();
+  } catch (error) {
+    console.warn('[AiAdapter] 初始化失败（可能扩展上下文已失效）：', error);
+    return;
+  }
 
   chrome.runtime.onMessage.addListener((request: AdapterMessage, _sender, sendResponse) => {
     if (!request || request.source !== 'ai-adapter') return;

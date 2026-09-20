@@ -378,28 +378,88 @@ export const weixinChannelsVideoPublisher = async (data) => {
         return confirmPublishButton;
     }
     
-    const autoPublish = async() => {
-        console.log('autoPublish');
-        const publishButton = getPublishButton();
-        if (!publishButton) {
-            console.log(`未找到${formElement.publishButtonText}按钮`)
+    // 通过 CDP 派发真实鼠标事件点击（滚动至可见 → 悬浮 → 按下 → 抬起），失败时回退 DOM click
+    const cdpClick = async (element: HTMLElement) => {
+        element.scrollIntoView({ block: 'center', inline: 'center' });
+        await sleep(300);
+
+        const rect = element.getBoundingClientRect();
+        const x = Math.round(rect.left + rect.width / 2);
+        const y = Math.round(rect.top + rect.height / 2);
+        console.log('cdpClick', { x, y });
+
+        if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
+            console.log('cdpClick 不可用（无 chrome.runtime），回退 DOM click');
+            element.click();
+            return false;
+        }
+
+        return new Promise<boolean>((resolve) => {
+            chrome.runtime.sendMessage({
+                type: 'request',
+                action: 'cdpClick',
+                data: { x, y },
+            }, (response: any) => {
+                if (chrome.runtime.lastError || response?.error) {
+                    console.log('cdpClick 失败，回退 DOM click', chrome.runtime.lastError?.message || response?.error);
+                    element.click();
+                    resolve(false);
+                    return;
+                }
+                console.log('cdpClick 完成');
+                resolve(true);
+            });
+        });
+    }
+
+    // 内容涉及时事/旧闻时，平台会弹出「发布内容自主声明」弹窗，需确认后才会真正发表
+    const handleDeclareDialog = async () => {
+        for (let i = 0; i < 10; i++) {
+            await sleep(500);
+            const dialogs = (editorDocument || document).querySelectorAll('.omui-dialog');
+            const dialog = Array.from(dialogs as NodeListOf<HTMLElement>).find((item) =>
+                item.textContent?.includes('发布内容自主声明')
+            );
+            if (!dialog) {
+                continue;
+            }
+            console.log('发现「发布内容自主声明」弹窗', dialog);
+
+            // 「无需标注」平台默认选中，未选中时兜底再点一次
+            const noDeclareRadio = dialog.querySelector('input.omui-radio__input[value="0"]') as HTMLInputElement;
+            if (noDeclareRadio && !noDeclareRadio.checked) {
+                noDeclareRadio.click();
+                await sleep(500);
+            }
+
+            // 点击弹窗底部确认按钮（通常为「确定/确认/发表」，位于「取消」之后）
+            const confirmButton = Array.from(dialog.querySelectorAll('button') as NodeListOf<HTMLElement>)
+                .reverse()
+                .find((button) => ['确定', '确认', '发表'].some((text) => button.textContent?.includes(text)));
+            if (confirmButton) {
+                await cdpClick(confirmButton);
+                console.log('已确认「发布内容自主声明」弹窗');
+            }
             return;
         }
-        console.log('trrigle publish button click');
-        publishButton.dispatchEvent(new Event('click', {
-            bubbles: true,
-            cancelable: true
-        }));
-        
-        const confirmPlublishButton = await observeElement(getConfirmPublishButton);
-        if (!confirmPlublishButton) {
+        console.log('未出现「发布内容自主声明」弹窗');
+    }
+
+    const autoPublish = async() => {
+        console.log('autoPublish');
+        // 「发表」与「保存草稿」同在 form-btns 且始终存在，不能先点「保存草稿」再点「发表」：
+        // 定时发表场景下两者冲突（“使用定时发表将无法保存草稿”），且两次点击间隔过短会与
+        // 草稿保存产生竞态，导致平台校验失败（LogicError: 发表失败），需直接点击「发表」
+        const confirmPublishButton = getConfirmPublishButton();
+        if (!confirmPublishButton) {
             console.log(`未找到${formElement.confirmButtonText}按钮`)
             return;
         }
-        confirmPlublishButton.dispatchEvent(new Event('click', {
-            bubbles: true,
-            cancelable: true
-        }));
+        await sleep(1000);
+        console.log('trrigle publish button click');
+        await cdpClick(confirmPublishButton as HTMLElement);
+        
+        await handleDeclareDialog();
     }
 
     await sleep(5000);

@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+// 必须在最前引入，确保 Vue 求值前定义好 feature flags
+import "./feature-flags";
+
 import type { PlasmoCSConfig } from "plasmo"
 
 import { initCopyEvent } from "~events/copy.event"
@@ -61,7 +64,9 @@ const initApp = async () => {
   app.mount(container);
 }
 
-initApp();
+initApp().catch((error) => {
+  console.error("[PostBot] initApp failed:", error);
+});
 
 // AI 自适应修复模块：观测当前页面发布表单健康度，平台改版自动修复
 void initAdapterService();
@@ -84,12 +89,12 @@ window.addEventListener("load", () => {
   chrome.runtime.sendMessage({
     type: "IMAGE_DETECTED",
     contentImages: Array.from(contentImages).map(img => ({ src: img.src })),
-  })
+  }).catch(() => {});
 
   chrome.runtime.sendMessage({
     type: "CONTENT_DETECTED",
     content: content,
-  });
+  }).catch(() => {});
 
   // document.body.style.background = "pink"
 })
@@ -133,7 +138,7 @@ const handleSelectionChange = debounceUtils.debounce(() => {
       url: window.location.href,
       timestamp: new Date().toISOString(),
       hasSelection: hasSelection,
-    });
+    }).catch(() => {});
   }
 }, 300);
 

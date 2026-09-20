@@ -1,5 +1,5 @@
 import { pluginRegistry, setupInjection, PluginType, PluginBase, PublisherConfig, PluginImplementation } from '@gitcoffee/postbot-plugin-engine';
-import { registerCnPlatforms, platformMetas as cnPlatformMetas, metaInfoList as cnMetaInfoList, publisher as cnPublisher, publisherDebugConfigs as cnPublisherDebugConfigs } from '@gitcoffee/postbot-publisher-cn';
+import { registerCnPlatforms, platformMetas as cnPlatformMetas, metaInfoList as cnMetaInfoList, publisher as cnPublisher, publisherDebugConfigs as cnPublisherDebugConfigs } from '../../../../packages/postbot-engine/publisher-cn/src/index';
 import { registerItPlatforms, platformMetas as itPlatformMetas, platforms as itPlatforms, metaInfoList as itMetaInfoList, publisher as itPublisher, publisherDebugConfigs as itPublisherDebugConfigs } from '@gitcoffee/postbot-publisher-it';
 import { registerIndustryPlatforms, platformMetas as industryPlatformMetas, platforms as industryPlatforms, metaInfoList as industryMetaInfoList, publisher as industryPublisher, publisherDebugConfigs as industryPublisherDebugConfigs } from '@gitcoffee/postbot-publisher-industry';
 import { publishEngine } from '@gitcoffee/postbot-publish-engine';
